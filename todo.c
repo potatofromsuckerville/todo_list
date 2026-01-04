@@ -1,103 +1,67 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <errno.h>
+#include <stdlib.h>
 
-#define MAX_TASKS 10
-#define CHAR_LENGTH 100
-
-typedef struct {
-    char title[CHAR_LENGTH];
-    } Tasks;
-
-void get_input(char *buffer, size_t size);
-void get_task_count(int *task_count);
-int create_todo(char *todo_name);
-
-int main(int argc, char **argv) {    
+int main(int argc, char **argv) {
+    FILE *f;
+    int new, add, read;
+    
     if (argc < 2) {
-	printf("Program usage: %s <todo_list_name> \n", argv[0]);
+	printf("Program usage: %s \"task1\" \"task2\" ...\n", argv[0]);
+	printf("Note: seperate tasks with spaces \n");
 	return 1;
+	}	   
+    new = strcmp(argv[1], "new");
+    if (new == 0) {
+	f = fopen("data.bin", "wb");
+	if (!f) {
+	    fprintf(stderr, "Could not open file. \n");
+	    goto clean_up;
+	    }
+	for (int i = 2; i < argc; i++) {
+	    size_t len = strlen(argv[i]);
+	    fwrite(&len, sizeof(size_t), 1, f);
+	    fwrite(argv[i], sizeof(char), len, f);
+	    }
+	goto clean_up;
+	}
+    add = strcmp(argv[1], "add");
+    if (add == 0) {
+	f = fopen("data.bin", "ab");
+	if (!f) {
+	    fprintf(stderr, "Could not open file. \n");
+	    goto clean_up;
+	    }
+	for (int i = 2; i < argc; i++) {
+	    size_t len = strlen(argv[i]);
+	    fwrite(&len, sizeof(size_t), 1, f);
+	    fwrite(argv[i], sizeof(char), len, f);
+	    }
+	goto clean_up;
 	}
     
-    create_todo(argv[1]);
-    return 0;
-    }
-
-void get_input(char *buffer, size_t size) {
-    if (fgets(buffer, size, stdin) == NULL){
-	printf("Program terminated. \n");
-	exit(EXIT_FAILURE);
-	}
-    int len = strlen(buffer);
-    if (buffer[len - 1] == '\n') {
-	buffer[len - 1] = '\0';
-	}
-    else if (getchar() == '\n');
-    else {
-	int c;
-	while ((c = getchar()) != '\n' && c != EOF);
-	fprintf(stderr, "Buffer overflow. \n");
-	exit(EXIT_FAILURE);
-	}
-    return;
-    }
-
-void get_task_count(int *task_count) {
-    char buffer[3];
-    get_input(buffer, sizeof(buffer));
-    
-    char *end_ptr;
-    errno = 0;
-    *task_count = (int)strtol(buffer, &end_ptr, 10);
-    if (end_ptr == buffer) {
-	fprintf(stderr, "Invalid entry. \n");
-	exit(EXIT_FAILURE);
-	}
-    if (errno == ERANGE) {
-	perror("Out of range. \n");
-	exit(EXIT_FAILURE);
-	}
-    if (*end_ptr != '\0') {
-	fprintf(stderr, "Non-integer character detected in input.");
-	exit(EXIT_FAILURE);
+    char *buff;
+    size_t len;
+    read = strcmp(argv[1], "read");
+    if (read == 0) {
+	f = fopen("data.bin", "rb");
+	if (!f) {
+	    fprintf(stderr, "Could not open file. \n");
+	    goto clean_up;
+	    }
+	rewind(f);
+	while (fread(&len, sizeof(size_t), 1, f)) {
+	    buff = malloc(len + 1);
+	    fread(buff, sizeof(char), len, f);
+	    buff[len] = '\0';
+	    printf("%s \n", buff);
+	    }
+	goto clean_up;
 	}    
-    return;
-    }
-
-int create_todo(char *todo_name) {
-    printf("======== To-do List App ======== \n");
-    printf("Enter the number of tasks (max of 10): ");
-    
-    int task_count;
-    get_task_count(&task_count);    
-    Tasks task_list[task_count];
-        
-    for (int i = 0; i < task_count; i++) {
-	printf("Enter task %d \n", i + 1);
-	if (fgets(task_list[i].title, CHAR_LENGTH, stdin) == NULL) {
-	    fprintf(stderr, "fgets failed. \n");
-	    return -1;
-	    }
-	int c;
-	char *newline = strchr(task_list[i].title, '\n');
-	if (newline != NULL) {
-	    *newline = '\0';
-	    }
-	else {
-	    while ((c = getchar()) != '\n' && c !=  EOF);	    
-	    } 
-	}
-
-    FILE *f = fopen(todo_name, "wb");
-    if (!f) {
-	fprintf(stderr, "Unable to create file. \n");
-	exit(EXIT_FAILURE);
-	}	
-    for (int i = 0; i < task_count; i++) {
-	fprintf(f, "%s\n", task_list[i].title);
-	}	
-    printf("List created successfully! \n");
-
-    return 1;
+    printf("Operation not specified. \n");
+    printf("Use arguments new/add/read before tasks. \n");
+    clean_up:
+	if (buff) free(buff);
+	if (f) fclose(f);
+    return 0;
     }
