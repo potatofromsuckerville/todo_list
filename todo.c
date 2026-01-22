@@ -1,67 +1,116 @@
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <time.h>
+
+typedef struct {
+    char task_name[64];    
+    }Tasks;
+
+Tasks *task = NULL;
+const char *file_name = "data.bin";
+
+void update_fn(uint task_count, const char *mode);
+void read_fn(void);
+void delete_fn(void);
 
 int main(int argc, char **argv) {
-    FILE *f;
-    int new, add, read;
-    
     if (argc < 2) {
-	printf("Program usage: %s \"task1\" \"task2\" ...\n", argv[0]);
-	printf("Note: seperate tasks with spaces \n");
+	printf("Program usage: %s <command> \"task1\" \"task2\" ... \n", argv[0]);
 	return 1;
-	}	   
-    new = strcmp(argv[1], "new");
-    if (new == 0) {
-	f = fopen("data.bin", "wb");
-	if (!f) {
-	    fprintf(stderr, "Could not open file. \n");
-	    goto clean_up;
-	    }
-	for (int i = 2; i < argc; i++) {
-	    size_t len = strlen(argv[i]);
-	    fwrite(&len, sizeof(size_t), 1, f);
-	    fwrite(argv[i], sizeof(char), len, f);
-	    }
-	goto clean_up;
 	}
-    add = strcmp(argv[1], "add");
-    if (add == 0) {
-	f = fopen("data.bin", "ab");
-	if (!f) {
-	    fprintf(stderr, "Could not open file. \n");
-	    goto clean_up;
-	    }
-	for (int i = 2; i < argc; i++) {
-	    size_t len = strlen(argv[i]);
-	    fwrite(&len, sizeof(size_t), 1, f);
-	    fwrite(argv[i], sizeof(char), len, f);
-	    }
-	goto clean_up;
+
+    uint task_count = (uint)argc - 2;
+    int new, read, add, delete;
+    task = malloc((task_count) * sizeof(Tasks));    
+    for(int i = 0; i < task_count; i++) {
+	strcpy(task[i].task_name, argv[i + 2]); 
 	}
     
-    char *buff;
-    size_t len;
+    new = strcmp(argv[1], "new");
     read = strcmp(argv[1], "read");
-    if (read == 0) {
-	f = fopen("data.bin", "rb");
-	if (!f) {
-	    fprintf(stderr, "Could not open file. \n");
-	    goto clean_up;
-	    }
-	rewind(f);
-	while (fread(&len, sizeof(size_t), 1, f)) {
-	    buff = malloc(len + 1);
-	    fread(buff, sizeof(char), len, f);
-	    buff[len] = '\0';
-	    printf("%s \n", buff);
-	    }
-	goto clean_up;
+    add = strcmp(argv[1], "add");
+    delete = strcmp(argv[1], "delete");
+    
+    if (new == 0) {
+	update_fn(task_count, "wb");
 	}    
-    printf("Operation not specified. \n");
-    printf("Use arguments new/add/read before tasks. \n");
-    clean_up:
-	if (buff) free(buff);
-	if (f) fclose(f);
+    else if (read == 0) {
+	read_fn();
+	}    
+    else if (add == 0) {
+	update_fn(task_count, "rb+");
+	}    
+    else if (delete == 0){
+	delete_fn();
+	}    
+    else {
+	printf("No commands detected. Use new/add/read/delete to perform operations. \n");
+	}
+    free(task);
     return 0;
+    }
+
+void update_fn(uint task_count, const char *mode) {
+    uint32_t len, date_len;
+    FILE *f = fopen(file_name, mode);
+    if (!f) {
+	perror("Error opening file");
+	return;
+	}
+    time_t date_created = time(NULL);
+   
+    const char *date = ctime(&date_created);
+    date_len = strlen(date);
+    printf("%d \n", date_len);
+    fwrite(&date_len, sizeof(uint32_t), 1, f);
+    fwrite(date, sizeof(char), date_len, f);
+    fwrite(&task_count, sizeof(int), 1, f);
+    for (int i = 0; i < task_count; i++) {
+	len = strlen(task[i].task_name);
+	fwrite(&len, sizeof(uint32_t), 1, f);
+	fwrite(task[i].task_name, sizeof(char), len, f);
+	}
+    
+    if (strcmp(mode, "wb") == 0) {
+	fwrite(&task_count, sizeof(uint), 1, f);
+	printf("List successfully created. \n");    
+	}
+    else if (strcmp(mode, "rb+") == 0) {
+	uint curr_count;	
+	fseek(f, -sizeof(uint), SEEK_END);
+	fread(&curr_count, sizeof(uint), 1, f);
+	curr_count += task_count;
+	fseek(f, 0, SEEK_SET);
+	fwrite(&task_count, sizeof(uint), 1, f);
+	printf("Items successfully added. \n");
+	}
+    else printf("Unknown mode entry. \n");
+    fclose(f);
+    }
+
+void read_fn(void) {
+    FILE *f = fopen(file_name, "r");
+    if (!f) {
+	perror("Error opening file.");
+	return;
+	}
+
+    uint32_t len, date_len;    
+    fread(&date_len, sizeof(uint32_t), 1, f);
+    char *date = malloc((date_len + 1) * sizeof(char));
+    fread(date, sizeof(char), date_len, f);
+    date[date_len] = '\0';
+    for (int i = 0; i < len; i++) {
+	fread(&len, sizeof(uint32_t), 1, f);
+	fread(task[i].task_name, sizeof(char), len, f);
+	}
+
+    free(date);
+    fclose(f);
+    }
+
+void delete_fn(void) {
+    printf("Items successfully deleted. \n");
     }
