@@ -2,115 +2,163 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <time.h>
+#include <errno.h>
+
+#define USER_ERROR -2
+#define SYSTEM_ERROR -1
+#define CREATE_SUCCESS 1
+#define READ_SUCCESS 2
+#define ADD_SUCCESS 3
+#define DELETE_SUCCESS 4
+#define DELETE_FAIL 5
 
 typedef struct {
-    char task_name[64];    
-    }Tasks;
+    char chore_name[64];
+    } Chores;
 
-Tasks *task = NULL;
-const char *file_name = "data.bin";
+Chores *chore_arr = NULL;
+const char *filename = "data.bin";
 
-void update_fn(uint task_count, const char *mode);
-void read_fn(void);
-void delete_fn(void);
+void create_list(char *command, uint32_t chore_count) {
+    FILE *f;
+        
+    if (strcmp(command, "create") == 0) {
+	f = fopen(filename, "wb");
+	}
+    else if (strcmp(command, "add") == 0) {
+	f = fopen(filename, "ab");
+	}
+    if (!f) {
+	perror("Failed to create file");
+	return;
+	}    
+        
+    uint32_t len;
+    for (int i = 0; i < chore_count; i++) {
+	len = strlen(chore_arr[i].chore_name);
+	fwrite(&len, sizeof(uint32_t), 1, f);
+	fwrite(chore_arr[i].chore_name, sizeof(char), len, f);
+	}	
+    fclose(f);
+    }
+
+void read_list(void) {
+    FILE *f = fopen(filename, "rb");
+    int i = 1;
+    
+    if (!f) {
+	perror("Failed to open file");
+	return;	
+	}
+    uint32_t len;
+    char *buffer;
+    while(fread(&len, sizeof(uint32_t), 1, f)) {
+	buffer = malloc(len + 1);
+	if(!buffer) {
+	    perror("Memory allocation failed");
+	    return;
+	    }
+	fread(buffer, sizeof(char), len, f);
+	buffer[len] = '\0';
+	printf("Item %d: \t%s \n", i, buffer);
+	i++;
+	}
+    fclose(f);
+    }
+
+void delete_item(int item) {        
+    FILE *f, *f_copy;
+    uint32_t len;
+    int i = 0;
+    Chores chore;
+    
+    f = fopen(filename, "rb");
+    f_copy = fopen("temp.bin", "wb");
+    if (!f || !f_copy) {
+	perror("Failed to open file");
+	return;
+	}
+    while (fread(&len, sizeof(uint32_t), 1, f)) {
+	fread(chore.chore_name, sizeof(char), len, f);
+	i++;
+	if (i == item) {
+	    printf("Item %d(%s) successfully deleted. \n", i, chore.chore_name);
+	    continue;
+	    }
+	fwrite(&len, sizeof(uint32_t), 1, f_copy);
+	fwrite(chore.chore_name, sizeof(char), len, f_copy);
+	}
+    if (item > i) printf("Item %d does not exist. \n", item);
+    remove(filename);
+    rename("temp.bin", filename);
+    fclose(f_copy);
+    fclose(f);
+    return;
+    }
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-	printf("Program usage: %s <command> \"task1\" \"task2\" ... \n", argv[0]);
-	return 1;
-	}
-
-    uint task_count = (uint)argc - 2;
-    int new, read, add, delete;
-    task = malloc((task_count) * sizeof(Tasks));    
-    for(int i = 0; i < task_count; i++) {
-	strcpy(task[i].task_name, argv[i + 2]); 
+	printf("Program usage: %s <command> <arguments> \n", argv[0]);
+	return USER_ERROR;
+	} 
+    uint32_t chore_count;
+    int create, add, read, delete;
+    chore_count = (uint32_t)argc - 2;
+    chore_arr = malloc(sizeof(Chores) * chore_count);
+    if (!chore_arr) {
+	perror("Memory allocation failed: ");
+	return SYSTEM_ERROR;
 	}
     
-    new = strcmp(argv[1], "new");
-    read = strcmp(argv[1], "read");
+    for (int i = 0; i < chore_count; i++) {
+	strcpy(chore_arr[i].chore_name, argv[i + 2]);
+	}
+    
+    create = strcmp(argv[1], "create");
     add = strcmp(argv[1], "add");
+    read = strcmp(argv[1], "read");
     delete = strcmp(argv[1], "delete");
     
-    if (new == 0) {
-	update_fn(task_count, "wb");
-	}    
+    if ((create == 0) || (add == 0)) {
+	create_list(argv[1], chore_count);
+	if (create == 0) {
+	    printf("New list created successfully. \n");
+	    return CREATE_SUCCESS;
+	    }
+	if (add == 0) {
+	    printf("List updated successfully. \n");
+	    return ADD_SUCCESS;
+	    }
+	}
     else if (read == 0) {
-	read_fn();
-	}    
-    else if (add == 0) {
-	update_fn(task_count, "rb+");
-	}    
-    else if (delete == 0){
-	delete_fn();
-	}    
-    else {
-	printf("No commands detected. Use new/add/read/delete to perform operations. \n");
+	read_list();
+	return READ_SUCCESS;
 	}
-    free(task);
+    else if (delete == 0) {
+	if (argc == 2) {
+	    remove(filename);
+	    printf("List deleted successfully. \n");
+	    return DELETE_SUCCESS;
+	    }
+	char *end_ptr;
+	int item, success;
+	success = 0;
+	errno = 0;
+	
+	item = (int)strtol(argv[2], &end_ptr, 10);
+	if (ERANGE != errno) {
+	    if (end_ptr != argv[2]) {
+		if (*end_ptr == '\0') {
+		    if (item > 0) {
+			success = 1;
+			delete_item(item);
+			return DELETE_SUCCESS;
+			}
+		    }
+		}
+	    }
+	if (!success) printf("Invalid argument. Must be a non-negative decimal number greater than zero. \n");
+	return DELETE_FAIL;
+	}
     return 0;
-    }
-
-void update_fn(uint task_count, const char *mode) {
-    uint32_t len, date_len;
-    FILE *f = fopen(file_name, mode);
-    if (!f) {
-	perror("Error opening file");
-	return;
-	}
-    time_t date_created = time(NULL);
-   
-    const char *date = ctime(&date_created);
-    date_len = strlen(date);
-    printf("%d \n", date_len);
-    fwrite(&date_len, sizeof(uint32_t), 1, f);
-    fwrite(date, sizeof(char), date_len, f);
-    fwrite(&task_count, sizeof(int), 1, f);
-    for (int i = 0; i < task_count; i++) {
-	len = strlen(task[i].task_name);
-	fwrite(&len, sizeof(uint32_t), 1, f);
-	fwrite(task[i].task_name, sizeof(char), len, f);
-	}
-    
-    if (strcmp(mode, "wb") == 0) {
-	fwrite(&task_count, sizeof(uint), 1, f);
-	printf("List successfully created. \n");    
-	}
-    else if (strcmp(mode, "rb+") == 0) {
-	uint curr_count;	
-	fseek(f, -sizeof(uint), SEEK_END);
-	fread(&curr_count, sizeof(uint), 1, f);
-	curr_count += task_count;
-	fseek(f, 0, SEEK_SET);
-	fwrite(&task_count, sizeof(uint), 1, f);
-	printf("Items successfully added. \n");
-	}
-    else printf("Unknown mode entry. \n");
-    fclose(f);
-    }
-
-void read_fn(void) {
-    FILE *f = fopen(file_name, "r");
-    if (!f) {
-	perror("Error opening file.");
-	return;
-	}
-
-    uint32_t len, date_len;    
-    fread(&date_len, sizeof(uint32_t), 1, f);
-    char *date = malloc((date_len + 1) * sizeof(char));
-    fread(date, sizeof(char), date_len, f);
-    date[date_len] = '\0';
-    for (int i = 0; i < len; i++) {
-	fread(&len, sizeof(uint32_t), 1, f);
-	fread(task[i].task_name, sizeof(char), len, f);
-	}
-
-    free(date);
-    fclose(f);
-    }
-
-void delete_fn(void) {
-    printf("Items successfully deleted. \n");
     }
