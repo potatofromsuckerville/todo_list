@@ -82,6 +82,7 @@ void delete_item(int item) {
 	fread(chore.chore_name, sizeof(char), len, f);
 	i++;
 	if (i == item) {
+	    chore.chore_name[len] = '\0';
 	    printf("Item %d(%s) successfully deleted. \n", i, chore.chore_name);
 	    continue;
 	    }
