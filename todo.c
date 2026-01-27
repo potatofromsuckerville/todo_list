@@ -6,11 +6,6 @@
 
 #define USER_ERROR -2
 #define SYSTEM_ERROR -1
-#define CREATE_SUCCESS 1
-#define READ_SUCCESS 2
-#define ADD_SUCCESS 3
-#define DELETE_SUCCESS 4
-#define DELETE_FAIL 5
 
 typedef struct {
     char chore_name[64];
@@ -51,7 +46,7 @@ void read_list(void) {
 	return;	
 	}
     uint32_t len;
-    char *buffer;
+    char *buffer = NULL;
     while(fread(&len, sizeof(uint32_t), 1, f)) {
 	buffer = malloc(len + 1);
 	if(!buffer) {
@@ -64,6 +59,7 @@ void read_list(void) {
 	printf("Item %d: \t%s \n", i, buffer);
 	i++;
 	free(buffer);
+	buffer = NULL;
 	}
     
     fclose(f);
@@ -126,42 +122,42 @@ int main(int argc, char **argv) {
 	create_list(argv[1], chore_count);
 	if (create == 0) {
 	    printf("New list created successfully. \n");
-	    return CREATE_SUCCESS;
 	    }
 	if (add == 0) {
 	    printf("List updated successfully. \n");
-	    return ADD_SUCCESS;
 	    }
 	}
     else if (read == 0) {
 	read_list();
-	return READ_SUCCESS;
 	}
     else if (delete == 0) {
+	int success;
 	if (argc == 2) {
 	    remove(filename);
 	    printf("List deleted successfully. \n");
-	    return DELETE_SUCCESS;
 	    }
-	char *end_ptr;
-	int item, success;
-	success = 0;
-	errno = 0;
-	
-	item = (int)strtol(argv[2], &end_ptr, 10);
-	if (ERANGE != errno) {
-	    if (end_ptr != argv[2]) {
-		if (*end_ptr == '\0') {
-		    if (item > 0) {
-			success = 1;
-			delete_item(item);
-			return DELETE_SUCCESS;
+	else /*this needs to be made an else if block to handle argc > 3 */{
+	    char *end_ptr;
+	    int item;
+	    success = 0;
+	    errno = 0;
+	    item = (int)strtol(argv[2], &end_ptr, 10);
+	    
+	    if (ERANGE != errno) {
+		if (end_ptr != argv[2]) {
+		    if (*end_ptr == '\0') {
+			if (item > 0) {
+			    success = 1;
+			    delete_item(item);			    
+			    }
 			}
 		    }
-		}
+		}	
 	    }
 	if (!success) printf("Invalid argument. Must be a non-negative decimal number greater than zero. \n");
-	return DELETE_FAIL;
 	}
+    
+    free(chore_arr);
+    chore_arr = NULL;
     return 0;
     }
