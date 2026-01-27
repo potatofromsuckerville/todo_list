@@ -56,13 +56,16 @@ void read_list(void) {
 	buffer = malloc(len + 1);
 	if(!buffer) {
 	    perror("Memory allocation failed");
+	    fclose(f);
 	    return;
 	    }
 	fread(buffer, sizeof(char), len, f);
 	buffer[len] = '\0';
 	printf("Item %d: \t%s \n", i, buffer);
 	i++;
+	free(buffer);
 	}
+    
     fclose(f);
     }
 
