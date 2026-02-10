@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
 	    remove(filename);
 	    printf("List deleted successfully. \n");
 	    }
-	else /*this needs to be made an else if block to handle argc > 3 */{
+	else { /* make this an else-if block to handle argc > 3 */
 	    char *end_ptr;
 	    int item;
 	    success = 0;

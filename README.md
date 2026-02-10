@@ -1,3 +1,6 @@
+Build:
+gcc -o todo.c todo
+
 Program usage:
 
 Create/overwrite list:
